@@ -1,10 +1,9 @@
 package com.myweather.android;
 
 import android.content.SharedPreferences;
-import android.graphics.Color;
-import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.support.v4.view.GravityCompat;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
@@ -65,13 +64,13 @@ public class WeatherActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if(Build.VERSION.SDK_INT>=21){
-            View decordView = getWindow().getDecorView();
-            decordView.setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-            );
-            getWindow().setStatusBarColor(Color.TRANSPARENT);
-        }
+//        if (Build.VERSION.SDK_INT >= 21) {
+//            View decordView = getWindow().getDecorView();
+//            decordView.setSystemUiVisibility(
+//                    View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+//            );
+//            getWindow().setStatusBarColor(Color.TRANSPARENT);
+//        }
         setContentView(R.layout.activity_weather);
         // 初始化各控件
         weatherLayout = (ScrollView) findViewById(R.id.weather_layout);
@@ -85,31 +84,51 @@ public class WeatherActivity extends AppCompatActivity {
         comfortText = (TextView) findViewById(R.id.comfort_text);
         carWashText = (TextView) findViewById(R.id.car_wash_text);
         sportText = (TextView) findViewById(R.id.sport_text);
-        bingPicImg= (ImageView) findViewById(R.id.bing_pic_img);
+        bingPicImg = (ImageView) findViewById(R.id.bing_pic_img);
+        drawerLayout= (DrawerLayout) findViewById(R.id.drawer_layout);
+        navButton= (Button) findViewById(R.id.nav_button);
+
+        swipeRefresh = (SwipeRefreshLayout) findViewById(R.id.swipe_refresh);
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        String bingPic=prefs.getString("bing_pic",null);
-        if(bingPic!=null){
+        String bingPic = prefs.getString("bing_pic", null);
+        if (bingPic != null) {
             Glide.with(this).load(bingPic).into(bingPicImg);
-        }else {
+        } else {
             loadBingPic();
         }
         String weatherString = prefs.getString("weather", null);
         if (weatherString != null) {
             //有缓冲时直接解析天气数据
             Weather weather = Utility.handleWeatherResponse(weatherString);
+            mWeatherId = weather.basic.weatherId;
             showWeatherInfo(weather);
-        }else {
+        } else {
             //无缓冲从服务器查询
-            String weatherId=getIntent().getStringExtra("weather_id");
+            mWeatherId = getIntent().getStringExtra("weather_id");
             weatherLayout.setVisibility(View.INVISIBLE);
-            requestWeather(weatherId);
+            requestWeather(mWeatherId);
 
         }
+        swipeRefresh.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+            @Override
+            public void onRefresh() {
+                //刷新从网络请求数据
+                requestWeather(mWeatherId);
+            }
+        });
+
+        navButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                drawerLayout.openDrawer(GravityCompat.START);
+
+            }
+        });
 
     }
-    /**
-     *     加载必应每日一图
 
+    /**
+     * 加载必应每日一图
      */
     private void loadBingPic() {
         String requestBingPic = "http://guolin.tech/api/bing_pic";
@@ -121,7 +140,7 @@ public class WeatherActivity extends AppCompatActivity {
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
-            final String bingPic=response.body().string();
+                final String bingPic = response.body().string();
                 SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(WeatherActivity.this).edit();
                 editor.putString("bing_pic", bingPic);
                 editor.apply();
@@ -139,7 +158,7 @@ public class WeatherActivity extends AppCompatActivity {
      * 从服务器获取数据
      * 根据天气id
      */
-    public void requestWeather(String weatherId){
+    public void requestWeather(String weatherId) {
         String weatherUrl = "http://guolin.tech/api/weather?cityid=" + weatherId + "&key=274a682a0b3c4abeab87a76cb96186ab";
         loadBingPic();
         HttpUtil.sendOkHttpRequset(weatherUrl, new Callback() {
@@ -149,7 +168,10 @@ public class WeatherActivity extends AppCompatActivity {
                     @Override
                     public void run() {
                         Toast.makeText(WeatherActivity.this, "获取天气失败", Toast.LENGTH_SHORT).show();
+                        swipeRefresh.setRefreshing(false);
+
                     }
+
                 });
 
             }
@@ -161,15 +183,17 @@ public class WeatherActivity extends AppCompatActivity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        if(weather!=null&&"ok".equals(weather.status)){
+                        if (weather != null && "ok".equals(weather.status)) {
                             SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(WeatherActivity.this).edit();
-                            editor.putString("weather",reponseText);
+                            editor.putString("weather", reponseText);
                             editor.apply();
                             showWeatherInfo(weather);
-                        }else {
+                            mWeatherId=weather.basic.weatherId;
+                        } else {
                             Toast.makeText(WeatherActivity.this, "获取天气失败", Toast.LENGTH_SHORT).show();
 
                         }
+                        swipeRefresh.setRefreshing(false);
                     }
                 });
 
